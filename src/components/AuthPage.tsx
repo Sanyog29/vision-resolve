@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCheck, Shield, Mail, Lock, User } from "lucide-react";
+import { UserCheck, Shield, Mail, Lock, User, Phone } from "lucide-react";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 interface AuthPageProps {
   onLogin: (userType: 'user' | 'employee', userData: any) => void;
@@ -16,14 +17,33 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    name: '',
-    employeeId: ''
+    full_name: '',
+    phone: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { user, loading, signUp, signIn } = useSupabaseAuth();
+
+  // If user is already authenticated, notify parent
+  if (user) {
+    onLogin(user.user_type, user);
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate login for demo purposes
-    onLogin(userType, { ...formData, userType });
+    
+    try {
+      if (isLogin) {
+        await signIn(formData.email, formData.password);
+      } else {
+        await signUp(formData.email, formData.password, {
+          full_name: formData.full_name,
+          user_type: userType,
+          phone: formData.phone
+        });
+      }
+    } catch (error) {
+      // Error is handled in the hook
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -73,35 +93,34 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="full_name">Full Name</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      id="name"
+                      id="full_name"
                       type="text"
                       placeholder="Enter your full name"
                       className="pl-10"
-                      value={formData.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      value={formData.full_name}
+                      onChange={(e) => handleInputChange('full_name', e.target.value)}
                       required={!isLogin}
                     />
                   </div>
                 </div>
               )}
 
-              {!isLogin && userType === 'employee' && (
+              {!isLogin && (
                 <div className="space-y-2">
-                  <Label htmlFor="employeeId">Employee ID</Label>
+                  <Label htmlFor="phone">Phone Number (Optional)</Label>
                   <div className="relative">
-                    <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      id="employeeId"
-                      type="text"
-                      placeholder="Enter your employee ID"
+                      id="phone"
+                      type="tel"
+                      placeholder="Enter your phone number"
                       className="pl-10"
-                      value={formData.employeeId}
-                      onChange={(e) => handleInputChange('employeeId', e.target.value)}
-                      required={!isLogin && userType === 'employee'}
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange('phone', e.target.value)}
                     />
                   </div>
                 </div>
@@ -139,8 +158,14 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full" variant="gradient" size="lg">
-                {isLogin ? 'Sign In' : 'Create Account'}
+              <Button 
+                type="submit" 
+                className="w-full" 
+                variant="gradient" 
+                size="lg"
+                disabled={loading}
+              >
+                {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
               </Button>
 
               <div className="text-center">

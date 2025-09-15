@@ -3,7 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Shield, 
   Clock, 
@@ -11,11 +13,15 @@ import {
   AlertCircle, 
   MapPin, 
   Upload, 
-  Eye,
-  MessageSquare,
-  Calendar
+  BarChart3,
+  Calendar,
+  Filter
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useReports } from "@/hooks/useReports";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import InteractiveMap from "./InteractiveMap";
+import AnalyticsDashboard from "./AnalyticsDashboard";
 
 interface EmployeeDashboardProps {
   user: any;
@@ -36,66 +42,24 @@ interface Complaint {
 }
 
 export default function EmployeeDashboard({ user, onLogout }: EmployeeDashboardProps) {
-  const [complaints, setComplaints] = useState<Complaint[]>([
-    {
-      id: '1',
-      description: 'Pothole on Main Street causing vehicle damage. Multiple vehicles have reported tire damage.',
-      status: 'pending',
-      createdAt: '2024-01-15',
-      location: 'Main Street, Block A',
-      userName: 'John Smith',
-      userEmail: 'john@example.com',
-      priority: 'high',
-      image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop'
-    },
-    {
-      id: '2',
-      description: 'Broken streetlight compromising safety in residential area',
-      status: 'in-progress',
-      createdAt: '2024-01-16',
-      location: 'Oak Avenue, Near Park',
-      userName: 'Sarah Johnson',
-      userEmail: 'sarah@example.com',
-      priority: 'medium'
-    },
-    {
-      id: '3',
-      description: 'Damaged sidewalk creating accessibility issues',
-      status: 'resolved',
-      createdAt: '2024-01-14',
-      location: 'Elm Street, Downtown',
-      userName: 'Mike Wilson',
-      userEmail: 'mike@example.com',
-      priority: 'low',
-      resolvedImage: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop'
-    }
-  ]);
-
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
   const [resolutionImage, setResolutionImage] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  
+  const { reports, loading, updateReportStatus, assignReport } = useReports();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const updateComplaintStatus = (complaintId: string, newStatus: Complaint['status']) => {
-    setComplaints(prev => 
-      prev.map(complaint => 
-        complaint.id === complaintId 
-          ? { ...complaint, status: newStatus }
-          : complaint
-      )
-    );
-
-    const statusMessages = {
-      'in-progress': 'Complaint marked as in progress',
-      'resolved': 'Complaint marked as resolved',
-      'pending': 'Complaint marked as pending'
-    };
-
-    toast({
-      title: "Status Updated",
-      description: statusMessages[newStatus]
-    });
+  const updateComplaintStatus = async (reportId: string, newStatus: 'pending' | 'in-progress' | 'resolved') => {
+    try {
+      await updateReportStatus(reportId, newStatus, {
+        assigned_employee_id: user?.id
+      });
+    } catch (error) {
+      // Error is handled in the hook
+    }
   };
 
   const handleResolutionImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,30 +73,23 @@ export default function EmployeeDashboard({ user, onLogout }: EmployeeDashboardP
     }
   };
 
-  const submitResolution = () => {
+  const submitResolution = async () => {
     if (!selectedComplaint) return;
 
-    setComplaints(prev => 
-      prev.map(complaint => 
-        complaint.id === selectedComplaint.id 
-          ? { 
-              ...complaint, 
-              status: 'resolved',
-              resolvedImage: resolutionImage || undefined
-            }
-          : complaint
-      )
-    );
+    try {
+      await updateReportStatus(selectedComplaint.id, 'resolved', {
+        completion_image_url: resolutionImage || undefined,
+        resolution_notes: resolutionNotes,
+        assigned_employee_id: user?.id
+      });
 
-    toast({
-      title: "Resolution Submitted",
-      description: "The complaint has been marked as resolved with the uploaded evidence."
-    });
-
-    // Reset form
-    setSelectedComplaint(null);
-    setResolutionNotes("");
-    setResolutionImage(null);
+      // Reset form
+      setSelectedComplaint(null);
+      setResolutionNotes("");
+      setResolutionImage(null);
+    } catch (error) {
+      // Error is handled in the hook
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -162,9 +119,15 @@ export default function EmployeeDashboard({ user, onLogout }: EmployeeDashboardP
     }
   };
 
-  const pendingCount = complaints.filter(c => c.status === 'pending').length;
-  const inProgressCount = complaints.filter(c => c.status === 'in-progress').length;
-  const resolvedCount = complaints.filter(c => c.status === 'resolved').length;
+  const pendingCount = reports.filter(r => r.status === 'pending').length;
+  const inProgressCount = reports.filter(r => r.status === 'in-progress').length;
+  const resolvedCount = reports.filter(r => r.status === 'resolved').length;
+
+  const filteredReports = reports.filter(report => {
+    if (statusFilter !== "all" && report.status !== statusFilter) return false;
+    if (priorityFilter !== "all" && report.priority !== priorityFilter) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -187,218 +150,332 @@ export default function EmployeeDashboard({ user, onLogout }: EmployeeDashboardP
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="shadow-medium">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Pending</p>
-                  <p className="text-3xl font-bold text-warning">{pendingCount}</p>
-                </div>
-                <Clock className="w-8 h-8 text-warning" />
-              </div>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="dashboard" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
+            <TabsTrigger value="map">Map View</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          </TabsList>
 
-          <Card className="shadow-medium">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">In Progress</p>
-                  <p className="text-3xl font-bold text-primary">{inProgressCount}</p>
-                </div>
-                <AlertCircle className="w-8 h-8 text-primary" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-medium">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Resolved</p>
-                  <p className="text-3xl font-bold text-success">{resolvedCount}</p>
-                </div>
-                <CheckCircle className="w-8 h-8 text-success" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Complaints List */}
-        <Card className="shadow-medium">
-          <CardHeader>
-            <CardTitle>All Complaints</CardTitle>
-            <CardDescription>
-              Manage and track complaint resolutions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {complaints.map((complaint) => (
-                <div key={complaint.id} className="p-6 border border-border rounded-lg hover:shadow-soft transition-all duration-200">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex gap-2">
-                      <Badge variant={getStatusColor(complaint.status)} className="flex items-center gap-1">
-                        {getStatusIcon(complaint.status)}
-                        {complaint.status.replace('-', ' ')}
-                      </Badge>
-                      <Badge variant={getPriorityColor(complaint.priority)}>
-                        {complaint.priority} priority
-                      </Badge>
-                    </div>
-                    <span className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      {complaint.createdAt}
-                    </span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <TabsContent value="dashboard" className="space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="shadow-medium">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-medium text-foreground mb-2">Complaint Details</h4>
-                      <p className="text-sm text-foreground mb-3">{complaint.description}</p>
-                      
-                      {complaint.location && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                          <MapPin className="w-3 h-3" />
-                          {complaint.location}
-                        </p>
-                      )}
+                      <p className="text-sm font-medium text-muted-foreground">Pending</p>
+                      <p className="text-3xl font-bold text-warning">{pendingCount}</p>
+                    </div>
+                    <Clock className="w-8 h-8 text-warning" />
+                  </div>
+                </CardContent>
+              </Card>
 
-                      <div className="text-xs text-muted-foreground">
-                        <p>Reported by: {complaint.userName}</p>
-                        <p>Email: {complaint.userEmail}</p>
+              <Card className="shadow-medium">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">In Progress</p>
+                      <p className="text-3xl font-bold text-primary">{inProgressCount}</p>
+                    </div>
+                    <AlertCircle className="w-8 h-8 text-primary" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-medium">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Resolved</p>
+                      <p className="text-3xl font-bold text-success">{resolvedCount}</p>
+                    </div>
+                    <CheckCircle className="w-8 h-8 text-success" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recent Reports Quick View */}
+            <Card className="shadow-medium">
+              <CardHeader>
+                <CardTitle>Recent High Priority Reports</CardTitle>
+                <CardDescription>
+                  Reports requiring immediate attention
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {reports.filter(r => r.priority === 'high' && r.status !== 'resolved').slice(0, 3).map((report) => (
+                    <div key={report.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{report.title}</p>
+                        <p className="text-xs text-muted-foreground">{report.category} • {report.location_address}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={getPriorityColor(report.priority)}>{report.priority}</Badge>
+                        <Button size="sm" onClick={() => updateComplaintStatus(report.id, 'in-progress')}>
+                          Start
+                        </Button>
                       </div>
                     </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-                    <div className="space-y-3">
-                      {complaint.image && (
-                        <div>
-                          <h5 className="text-sm font-medium text-foreground mb-2">Complaint Image</h5>
-                          <img 
-                            src={complaint.image} 
-                            alt="Complaint" 
-                            className="w-full h-32 object-cover rounded-lg shadow-soft"
-                          />
-                        </div>
-                      )}
+          <TabsContent value="reports" className="space-y-6">
+            {/* Filters */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Filter className="w-5 h-5" />
+                  Filter Reports
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex gap-4">
+                <select 
+                  value={statusFilter} 
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="border rounded p-2"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+                <select 
+                  value={priorityFilter} 
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="border rounded p-2"
+                >
+                  <option value="all">All Priority</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </CardContent>
+            </Card>
 
-                      {complaint.resolvedImage && (
-                        <div>
-                          <h5 className="text-sm font-medium text-success mb-2">Resolution Image</h5>
-                          <img 
-                            src={complaint.resolvedImage} 
-                            alt="Resolution" 
-                            className="w-full h-32 object-cover rounded-lg shadow-soft"
-                          />
-                        </div>
-                      )}
-                    </div>
+            {/* Reports List */}
+            <Card className="shadow-medium">
+              <CardHeader>
+                <CardTitle>All Reports ({filteredReports.length})</CardTitle>
+                <CardDescription>
+                  Manage and track report resolutions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Loading reports...</p>
                   </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredReports.map((report) => (
+                      <div key={report.id} className="p-6 border border-border rounded-lg hover:shadow-soft transition-all duration-200">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex gap-2">
+                            <Badge variant={getStatusColor(report.status)} className="flex items-center gap-1">
+                              {getStatusIcon(report.status)}
+                              {report.status.replace('-', ' ')}
+                            </Badge>
+                            <Badge variant={getPriorityColor(report.priority)}>
+                              {report.priority} priority
+                            </Badge>
+                            <Badge variant="outline">{report.category}</Badge>
+                          </div>
+                          <span className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(report.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <h4 className="font-medium text-foreground mb-2">{report.title}</h4>
+                            <p className="text-sm text-foreground mb-3">{report.description}</p>
+                            
+                            {report.location_address && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                                <MapPin className="w-3 h-3" />
+                                {report.location_address}
+                              </p>
+                            )}
 
-                  <div className="flex gap-2 flex-wrap">
-                    {complaint.status === 'pending' && (
-                      <Button 
-                        onClick={() => updateComplaintStatus(complaint.id, 'in-progress')}
-                        variant="default"
-                        size="sm"
-                      >
-                        Start Working
-                      </Button>
-                    )}
-                    
-                    {complaint.status === 'in-progress' && (
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button 
-                            onClick={() => setSelectedComplaint(complaint)}
-                            variant="success"
-                            size="sm"
-                          >
-                            <Upload className="w-4 h-4 mr-2" />
-                            Mark Resolved
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>Mark Complaint as Resolved</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground mb-2">Complaint:</p>
-                              <p className="text-sm text-foreground">{complaint.description}</p>
+                            <div className="text-xs text-muted-foreground">
+                              <p>Report ID: {report.id.slice(0, 8)}...</p>
+                              <p>Department: {report.department || 'Unassigned'}</p>
                             </div>
+                          </div>
 
-                            <div>
-                              <label className="text-sm font-medium text-foreground mb-2 block">
-                                Upload Resolution Image
-                              </label>
-                              <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handleResolutionImageUpload}
-                                className="hidden"
-                              />
-                              <Button 
-                                onClick={() => fileInputRef.current?.click()}
-                                variant="outline"
-                                className="w-full"
-                              >
-                                <Upload className="w-4 h-4 mr-2" />
-                                Choose Image
-                              </Button>
-                            </div>
-
-                            {resolutionImage && (
+                          <div className="space-y-3">
+                            {report.original_image_url && (
                               <div>
-                                <p className="text-sm font-medium text-foreground mb-2">Preview:</p>
+                                <h5 className="text-sm font-medium text-foreground mb-2">Report Image</h5>
                                 <img 
-                                  src={resolutionImage} 
-                                  alt="Resolution preview" 
-                                  className="w-full h-48 object-cover rounded-lg shadow-soft"
+                                  src={report.original_image_url} 
+                                  alt="Report" 
+                                  className="w-full h-32 object-cover rounded-lg shadow-soft"
                                 />
                               </div>
                             )}
 
-                            <div className="flex gap-3">
-                              <Button 
-                                onClick={submitResolution}
-                                variant="success"
-                                className="flex-1"
-                                disabled={!resolutionImage}
-                              >
-                                Submit Resolution
-                              </Button>
-                              <Button 
-                                onClick={() => {
-                                  setSelectedComplaint(null);
-                                  setResolutionImage(null);
-                                  setResolutionNotes("");
-                                }}
-                                variant="outline"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
+                            {report.completion_image_url && (
+                              <div>
+                                <h5 className="text-sm font-medium text-success mb-2">Resolution Image</h5>
+                                <img 
+                                  src={report.completion_image_url} 
+                                  alt="Resolution" 
+                                  className="w-full h-32 object-cover rounded-lg shadow-soft"
+                                />
+                              </div>
+                            )}
                           </div>
-                        </DialogContent>
-                      </Dialog>
-                    )}
+                        </div>
 
-                    {complaint.status === 'resolved' && (
-                      <Badge variant="success" className="flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Completed
-                      </Badge>
+                        <div className="flex gap-2 flex-wrap">
+                          {report.status === 'pending' && (
+                            <Button 
+                              onClick={() => updateComplaintStatus(report.id, 'in-progress')}
+                              variant="default"
+                              size="sm"
+                            >
+                              Start Working
+                            </Button>
+                          )}
+                          
+                          {report.status === 'in-progress' && (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button 
+                                  onClick={() => setSelectedComplaint(report as any)}
+                                  variant="success"
+                                  size="sm"
+                                >
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  Mark Resolved
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                  <DialogTitle>Mark Report as Resolved</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div>
+                                    <p className="text-sm text-muted-foreground mb-2">Report:</p>
+                                    <p className="text-sm text-foreground">{report.description}</p>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label>Resolution Notes</Label>
+                                    <Textarea
+                                      value={resolutionNotes}
+                                      onChange={(e) => setResolutionNotes(e.target.value)}
+                                      placeholder="Describe how the issue was resolved..."
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-sm font-medium text-foreground mb-2 block">
+                                      Upload Resolution Image
+                                    </label>
+                                    <input
+                                      ref={fileInputRef}
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={handleResolutionImageUpload}
+                                      className="hidden"
+                                    />
+                                    <Button 
+                                      onClick={() => fileInputRef.current?.click()}
+                                      variant="outline"
+                                      className="w-full"
+                                    >
+                                      <Upload className="w-4 h-4 mr-2" />
+                                      Choose Image
+                                    </Button>
+                                  </div>
+
+                                  {resolutionImage && (
+                                    <div>
+                                      <p className="text-sm font-medium text-foreground mb-2">Preview:</p>
+                                      <img 
+                                        src={resolutionImage} 
+                                        alt="Resolution preview" 
+                                        className="w-full h-48 object-cover rounded-lg shadow-soft"
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div className="flex gap-3">
+                                    <Button 
+                                      onClick={submitResolution}
+                                      variant="success"
+                                      className="flex-1"
+                                      disabled={!resolutionImage}
+                                    >
+                                      Submit Resolution
+                                    </Button>
+                                    <Button 
+                                      onClick={() => {
+                                        setSelectedComplaint(null);
+                                        setResolutionImage(null);
+                                        setResolutionNotes("");
+                                      }}
+                                      variant="outline"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
+
+                          {report.status === 'resolved' && (
+                            <Badge variant="success" className="flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />
+                              Completed
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {filteredReports.length === 0 && (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No reports match the current filters.</p>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="map">
+            <InteractiveMap 
+              reports={reports.map(r => ({
+                id: r.id,
+                lat: r.location_lat || 40.7128,
+                lng: r.location_lng || -74.0060,
+                title: r.title,
+                status: r.status,
+                priority: r.priority,
+                category: r.category,
+                createdAt: r.created_at
+              }))}
+            />
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <AnalyticsDashboard />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
