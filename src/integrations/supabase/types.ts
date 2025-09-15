@@ -14,53 +14,146 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_data: {
+        Row: {
+          average_resolution_time: number | null
+          created_at: string | null
+          date: string
+          department: string | null
+          id: string
+          location_zone: string | null
+          resolved_reports: number | null
+          total_reports: number | null
+        }
+        Insert: {
+          average_resolution_time?: number | null
+          created_at?: string | null
+          date: string
+          department?: string | null
+          id?: string
+          location_zone?: string | null
+          resolved_reports?: number | null
+          total_reports?: number | null
+        }
+        Update: {
+          average_resolution_time?: number | null
+          created_at?: string | null
+          date?: string
+          department?: string | null
+          id?: string
+          location_zone?: string | null
+          resolved_reports?: number | null
+          total_reports?: number | null
+        }
+        Relationships: []
+      }
+      departments: {
+        Row: {
+          active: boolean | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          response_time_hours: number | null
+        }
+        Insert: {
+          active?: boolean | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          response_time_hours?: number | null
+        }
+        Update: {
+          active?: boolean | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          response_time_hours?: number | null
+        }
+        Relationships: []
+      }
       maintenance_requests: {
         Row: {
+          actual_resolution_time: number | null
+          ai_analysis_data: Json | null
           assigned_employee_id: string | null
+          audio_description_url: string | null
+          category: string | null
+          citizen_rating: number | null
           completed_at: string | null
           completion_image_url: string | null
           created_at: string | null
+          department: string | null
           description: string | null
+          estimated_resolution_time: number | null
           id: string
           location_address: string | null
           location_lat: number | null
           location_lng: number | null
           original_image_url: string | null
           priority: string | null
+          reporter_phone: string | null
+          resolution_notes: string | null
           status: string | null
           title: string
           updated_at: string | null
           user_id: string | null
         }
         Insert: {
+          actual_resolution_time?: number | null
+          ai_analysis_data?: Json | null
           assigned_employee_id?: string | null
+          audio_description_url?: string | null
+          category?: string | null
+          citizen_rating?: number | null
           completed_at?: string | null
           completion_image_url?: string | null
           created_at?: string | null
+          department?: string | null
           description?: string | null
+          estimated_resolution_time?: number | null
           id?: string
           location_address?: string | null
           location_lat?: number | null
           location_lng?: number | null
           original_image_url?: string | null
           priority?: string | null
+          reporter_phone?: string | null
+          resolution_notes?: string | null
           status?: string | null
           title: string
           updated_at?: string | null
           user_id?: string | null
         }
         Update: {
+          actual_resolution_time?: number | null
+          ai_analysis_data?: Json | null
           assigned_employee_id?: string | null
+          audio_description_url?: string | null
+          category?: string | null
+          citizen_rating?: number | null
           completed_at?: string | null
           completion_image_url?: string | null
           created_at?: string | null
+          department?: string | null
           description?: string | null
+          estimated_resolution_time?: number | null
           id?: string
           location_address?: string | null
           location_lat?: number | null
           location_lng?: number | null
           original_image_url?: string | null
           priority?: string | null
+          reporter_phone?: string | null
+          resolution_notes?: string | null
           status?: string | null
           title?: string
           updated_at?: string | null
@@ -82,6 +175,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notification_preferences: {
+        Row: {
+          created_at: string | null
+          email_notifications: boolean | null
+          id: string
+          push_notifications: boolean | null
+          sms_notifications: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          push_notifications?: boolean | null
+          sms_notifications?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          push_notifications?: boolean | null
+          sms_notifications?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       request_updates: {
         Row: {
