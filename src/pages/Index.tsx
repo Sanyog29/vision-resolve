@@ -1,14 +1,28 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import AuthPage from "@/components/AuthPage";
+import UserDashboard from "@/components/UserDashboard";
+import EmployeeDashboard from "@/components/EmployeeDashboard";
 
 const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  const handleLogin = (userType: 'user' | 'employee', userData: any) => {
+    setCurrentUser({ ...userData, userType });
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
+  if (!currentUser) {
+    return <AuthPage onLogin={handleLogin} />;
+  }
+
+  if (currentUser.userType === 'employee') {
+    return <EmployeeDashboard user={currentUser} onLogout={handleLogout} />;
+  }
+
+  return <UserDashboard user={currentUser} onLogout={handleLogout} />;
 };
 
 export default Index;
